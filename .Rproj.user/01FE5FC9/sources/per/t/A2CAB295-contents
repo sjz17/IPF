@@ -1,0 +1,1413 @@
+
+
+load("D:/BaiduNetdiskDownload/Sun00/GEO/IPF.cli.Rdata")
+load("D:/BaiduNetdiskDownload/Sun00/GEO/IPF.exp.Rdata")
+
+IPF.exp$GSE70866=GSE70866$exp_unique
+IPF.exp$GSE93606=GSE93606$exp_unique
+
+cli <- read_excel("D:/BaiduNetdiskDownload/Sun07.IPF/cli.xlsx")
+rownames(cli)=cli$ID
+
+IPF.cli$GSE28042=cli
+IPF.cli$GSE28042$ID=rownames(IPF.cli$GSE28042)
+
+int1=intersect(rownames(GSE28221_readme),colnames(IPF.exp$GSE27957))
+GSE27957.cli=GSE28221_readme[int1,]
+int2=intersect(rownames(GSE28221_readme),colnames(IPF.exp$GSE28042))
+GSE28042.cli=GSE28221_readme[int2,]
+
+IPF.cli$GSE27957=GSE27957.cli
+IPF.cli$GSE28042=GSE28042.cli
+
+save(IPF.cli,file ='D:\\BaiduNetdiskDownload\\Sun00\\GEO\\IPF.cli.Rdata')
+save(IPF.exp,file ='D:\\BaiduNetdiskDownload\\Sun00\\GEO\\IPF.exp.Rdata')
+write.csv(venn, file = 'D:\\BaiduNetdiskDownload\\Sun07.IPF\\tem.venn.csv', row.names = T)
+
+
+table(IPF.cli$gse9)
+
+library(CDI)
+data(f)
+
+####################【bulk-RNAseq】####################
+
+
+##########=
+plot=bio_plot_venn(gene.cd.list);plot
+list_venn=gene.cd.list
+
+pdf(file="D:\\BaiduNetdiskDownload\\Sun07.IPF\\gene.upset.pdf", width=18, height=12)
+plot_complex
+dev.off();dev.off();dev.off();
+##########=
+
+load("D:/BaiduNetdiskDownload/Sun07.IPF/Inputdata/GSE93606.Rdata")
+inter=intersect(rownames(GSE93606$cli),colnames(GSE93606$exp_unique))
+inter_data_data=GSE93606$exp_unique[intersect(rownames(GSE93606$exp_unique),gene.cd),inter]
+inter_data_group=GSE93606$cli[inter,]
+colnames(inter_data_group)[1]='group'
+#********************************************************************************
+#######limma
+out.cd.limma=diff_limma(inter_data_data,inter_data_group,padj=0.05,foldChange=0)
+
+save(out.cd.limma,file="D:\\BaiduNetdiskDownload\\Sun07.IPF\\out.cd.limma.Rdata")
+load("D:/BaiduNetdiskDownload/Sun07.IPF/out.cd.limma.Rdata")
+plot=bio_plot_volcone(out.cd.limma$diff,'GSE93606');plot
+pdf(file="D:\\BaiduNetdiskDownload\\Sun07.IPF\\gene.volcano.pdf", width=7, height=6)
+plot
+dev.off();dev.off()
+
+#********************************************************************************
+######enrich
+source('D:\\BaiduNetdiskDownload\\Sun00\\function\\code_function.R')
+library(BioEnricher);library(DESeq2);library(tidyverse);library(clusterProfiler);library(org.Hs.eg.db);library(BioEnricher)
+load("D:/BaiduNetdiskDownload/Sun07.IPF/out.cd.limma.Rdata")
+
+out.enrich <- lzq_ORA.integrated(
+  genes =rownames(out.cd.limma$diffSig) ,
+  background.genes = NULL,
+  GO.ont = 'ALL',
+  perform.WikiPathways = F,
+  perform.Reactome = T,
+  perform.MsigDB = F,
+  MsigDB.category = 'ALL',
+  perform.Cancer.Gene.Network = T,
+  perform.disease.ontoloty = T,
+  perform.DisGeNET = T,
+  perform.CellMarker = T,
+  perform.CMAP = T,
+  min.Geneset.Size = 3
+)
+save(out.enrich,file="D:\\BaiduNetdiskDownload\\Sun07.IPF\\out.enrich.Rdata")
+load("D:/BaiduNetdiskDownload/Sun07.IPF/out.enrich.Rdata")
+
+
+plot1=lzq_ORA.barplot1(enrich.obj = out.enrich$KEGG,show.term.num = 25,colors = colorRampPalette(c('#D89C7A', "#F3EEEA",'#686789'))(100));plot
+pdf(file="D:\\BaiduNetdiskDownload\\Sun07.IPF\\gene.kegg.pdf",  width=11, height=8)
+plot1
+dev.off();dev.off()
+
+enrichGO=out.enrich$GO@result
+plot2=bio_plot_go(enrichGO);plot
+pdf(file="D:\\BaiduNetdiskDownload\\Sun07.IPF\\gene.go.pdf",  width=8, height=7)
+plot2$my_plot
+dev.off();dev.off()
+
+#********************************************************************************
+#ssGSEA
+
+load("D:/BaiduNetdiskDownload/Sun07.IPF/Inputdata/GSE70866.Rdata")
+library(limma);library(GSVA);library(GSEABase);library(reshape2);library(tidyHeatmap);library(Rmisc);library(survminer)
+geneSet=getGmt("D:\\BaiduNetdiskDownload\\Sun00\\Sun_cd.gmt", geneIdType=SymbolIdentifier())
+inter_data_data=bio_data_process(GSE70866$exp_unique)
+out.cd.fun=bio_GSEA(inter_data_data, geneSet)
+save(out.cd.fun,file='D:\\BaiduNetdiskDownload\\Sun07.IPF\\out.cd.fun.Rdata')
+
+load("D:/BaiduNetdiskDownload/Sun07.IPF/out.cd.fun.Rdata")
+out.cd.fun=as.data.frame(t(out.cd.fun))
+out.cd.fun=data.frame(ID=rownames(out.cd.fun),out.cd.fun)
+out.cd.fun=melt(out.cd.fun)
+out.cd.fun=merge(out.cd.fun,GSE70866$cli,by.x='ID',by.y='GEO')
+out.cd.fun=bio_data_process(out.cd.fun);colnames(out.cd.fun)
+col=c("#E1CCB1","#686789","#fb9a99","#fdbf6f","#e31a1c")
+plot=ggplot(out.cd.fun,aes(x=data,y=value,fill=data))+#修改x
+  geom_boxplot(position=position_dodge(1))+
+  scale_fill_manual(values = col)+
+  scale_color_manual(values = col)+
+  geom_signif(
+    comparisons = list(c("Control","IPF")),
+    tip_length = 0.02,size = 1,textsize = 4,#增加***尺寸
+    map_signif_level = F #用*表示显著性，*---0.05，**---0.01，***---0.001
+  )+
+  facet_wrap(~variable,nrow = 2)+#按supp划分
+  theme_bw()
+
+pdf(file="D:\\BaiduNetdiskDownload\\Sun07.IPF\\gene.control.pdf",  width=20, height=8)
+plot
+dev.off();dev.off()
+
+
+####################【scRNAseq】####################
+
+
+
+
+source('D:\\BaiduNetdiskDownload\\Sun00\\function\\code_function.R')
+
+#dir='D:\\BaiduNetdiskDownload\\Sun00\\GEO\\IPF.GSE128033\\'
+dir='D:\\BaiduNetdiskDownload\\Sun00\\GEO\\IPF_GSE122960'
+GSE122960=sc.read.h5(dir)
+GSE122960.control=sc_quality_control(GSE122960);
+
+######sc.seuret
+library(Seurat);library(harmony);library(Scillus);library(scRNAtoolVis);library(ggsci);library(readr)
+seuret.data=GSE122960.control
+seuret.data=sc.seuret(seuret.data)
+#save(seuret.data,file='D:\\BaiduNetdiskDownload\\Sun07.IPF\\sc\\GSE122960.seuret.Rdata')
+
+######=
+#load("D:/BaiduNetdiskDownload/Sun07.IPF/sc/GSE122960.seuret.Rdata")
+
+#clustree
+seuret.data <- FindNeighbors(seuret.data, dims = 1:15)
+library(clustree);library(patchwork)
+seq <- seq(0.1, 1.5, by = 0.1)
+for (res in seq){
+  seuret.data <- FindClusters(seuret.data, resolution = res)
+}
+plot=clustree(seuret.data, prefix = 'RNA_snn_res.')
+pdf(file="D:\\BaiduNetdiskDownload\\Sun07.IPF\\sc\\sc.clustree.pdf", width=10, height=15)
+plot
+dev.off();dev.off()
+#########=
+
+seuret.data <- SetIdent(seuret.data, value = "RNA_snn_res.0.7");table(seuret.data$RNA_snn_res.0.7)
+seuret.data$seurat_clusters=seuret.data$RNA_snn_res.0.7;table(seuret.data$seurat_clusters)
+
+seuret.data$group=sapply(strsplit(seuret.data$orig.ident,"\\_"),"[",1)
+seuret.data$group=ifelse(seuret.data$group=='IPF','IPF','Normal')
+
+###机器注释
+cell.name.all=rownames(seuret.data@meta.data)
+out.lung=sc.ScType(seuret.data,'Lung')
+out.imm=sc.ScType(seuret.data,'Immune system')
+out.cell=merge(out.lung$sctype_scores,out.imm$sctype_scores,by='cluster')
+write.csv(out.cell, file = 'D:\\BaiduNetdiskDownload\\Sun07.IPF\\sc\\tem.out.cell.csv', row.names = T)
+
+
+###人工注释
+out.dotplot=sc.plot.dot(seuret.data,genes_list = gene.IPF.list);out.dotplot$dotplot
+pdf(file="D:\\BaiduNetdiskDownload\\Sun07.IPF\\sc\\sc.dotplot.pdf", width=17, height=6)
+out.dotplot$dotplot
+dev.off();dev.off()
+tem_out_cell <- read_csv("D:\\BaiduNetdiskDownload\\Sun07.IPF\\sc\\tem.out.cell.csv")
+seuret.data=sc.ann(seuret.data,tem_out_cell)
+save(seuret.data,file='D:\\BaiduNetdiskDownload\\Sun07.IPF\\sc\\GSE122960.seuret.Rdata')
+
+#********************************************************************************
+
+library(Scissor)
+load("D:/BaiduNetdiskDownload/Sun00/GEO/IPF.cli.Rdata")
+load("D:/BaiduNetdiskDownload/Sun00/GEO/IPF.exp.Rdata")
+load("D:/BaiduNetdiskDownload/Sun07.IPF/sc/GSE122960.seuret.Rdata")
+source('D:\\BaiduNetdiskDownload\\Sun00\\function\\code_function.R')
+#save(seuret.data,file = 'D:\\BaiduNetdiskDownload\\Sun07.IPF\\sc\\Scissor.RData')
+Cells.sub <- subset(seuret.data@meta.data, group=="IPF")
+seuret.data<- subset(seuret.data, cells=row.names(Cells.sub))
+seuret.data=sc.seuret(seuret.data)
+seuret.data <- FindNeighbors(seuret.data, dims = 1:15)
+
+bulk_dataset=IPF.exp$GSE70866
+phenotype=IPF.cli$GSE70866[,c(7,6)]
+phenotype=bio_data_process(phenotype)
+remove(IPF.exp);#remove(seuret.data)
+#Load data
+#dim(sc_dataset)
+#> [1] 21287  8853
+# An object of class Seurat
+# 21287 features across 8853 samples within 1 assay
+# Active assay: RNA (21287 features, 0 variable features)
+head(bulk_dataset[,1:10])
+head(phenotype)
+colnames(phenotype) <- c("time", "status")
+int=intersect(colnames(bulk_dataset),row.names(phenotype))
+bulk_dataset=bulk_dataset[,int];phenotype=phenotype[int,]
+identical(colnames(bulk_dataset),row.names(phenotype))
+#                 time status
+# TCGA-2Y-A9GS-01  724      1
+# TCGA-2Y-A9GT-01 1624      1
+# TCGA-2Y-A9GU-01 1939      0
+# TCGA-2Y-A9GV-01 2532      1
+# TCGA-2Y-A9GW-01 1271      1
+# TCGA-2Y-A9GX-01 2442      0
+colnames(bulk_dataset) == row.names(phenotype)
+library(preprocessCore)
+infos1 <- Scissor(bulk_dataset, seuret.data, phenotype, alpha = 0.05, family = "cox",
+                  Save_file = 'D:\\BaiduNetdiskDownload\\Sun07.IPF\\sc\\Scissor_survival.RData')
+
+
+Scissor_select <- rep('0', ncol(seuret.data))
+names(Scissor_select) <- colnames(seuret.data)
+Scissor_select[infos1$Scissor_pos] <- '1'
+Scissor_select[infos1$Scissor_neg] <-'2'
+load("D:/BaiduNetdiskDownload/Sun07.IPF/sc/GSE122960.seuret.Rdata")
+seuret.data <- AddMetaData(seuret.data, metadata = Scissor_select, col.name = "scissor")
+seuret.data$cells=ifelse(seuret.data$scissor=='0','other cells',
+                        ifelse(seuret.data$scissor=='1','R cells',
+                               ifelse(seuret.data$scissor=='2','NR cells',NA
+                        )))
+plot=DimPlot(seuret.data, reduction = 'umap', group.by = 'cells',
+             cols = c('indianred1','royalblue','grey'), pt.size = 1.2, order = c(2,1))
+
+
+seuret.data$cell.name=rownames(seuret.data@meta.data)
+Scissor.meta=seuret.data@meta.data
+save(Scissor.meta,file='D:\\BaiduNetdiskDownload\\Sun07.IPF\\sc\\Scissor.meta.RData')
+seuret.data <- AddMetaData(seuret.data, metadata = Scissor_select, col.name = "scissor")
+##########=
+
+load("D:/BaiduNetdiskDownload/Sun07.IPF/sc/GSE122960.seuret.Rdata")
+Cells.sub <- subset(seuret.data@meta.data, group=="IPF")
+seuret.data<- subset(seuret.data, cells=row.names(Cells.sub))
+seuret.data <- SetIdent(seuret.data, value = "group");table(seuret.data$group)
+diff.markers <- FindAllMarkers(seuret.data, logfc.threshold = 0.25, min.pct = 0.1, only.pos = F)
+save(diff.markers,file='D:\\BaiduNetdiskDownload\\Sun07.IPF\\sc\\diff.markers.Rdata')
+
+seuret.data <- SetIdent(seuret.data, value = "cells");table(seuret.data$cells)
+markers <- FindAllMarkers(seuret.data, logfc.threshold = 0.20, min.pct = 0.1, only.pos = F)
+save(markers,file='D:\\BaiduNetdiskDownload\\Sun07.IPF\\sc\\markers.Rdata')
+
+#********************************************************************************
+
+
+###############RCDS=
+source('D:\\BaiduNetdiskDownload\\Sun07.IPF\\inputdata\\code.ml.prognostic.R')
+load("D:/BaiduNetdiskDownload/Sun07.IPF/sc/GSE122960.seuret.Rdata")
+model <- readRDS("D:/BaiduNetdiskDownload/Sun07.IPF/out.model.rds")
+dat=seuret.data@assays$RNA@scale.data;dat[c(1:3),c(1:3)]
+
+library(pROC);library(ggplot2)
+int=intersect(rownames(seuret.data@assays$RNA@scale.data),model$`RSF+plsRcox`$subFeature)
+dat=seuret.data@assays$RNA@scale.data[int,]
+Test=as.data.frame(t(dat))
+
+new_data=scale(Test)
+score<- CalRiskScore(fit = model$`RSF+plsRcox`,
+                     new_data =new_data, # 4.0更新
+                     type = "lp") # 同原文，使用linear Predictor计算得分
+
+CDI.score=as.data.frame(score)
+seuret.data$CDI.score=CDI.score
+save(seuret.data,file='D:\\BaiduNetdiskDownload\\Sun07.IPF\\sc\\GSE122960.seuret.Rdata')
+
+
+seuret.data@meta.data=bio_data_process(seuret.data@meta.data)
+plot=FeaturePlot(seuret.data, 'CDI.score',cols = colorRampPalette(c('#686789', "#fdbf6f",'#D89C7A'))(2),reduction = "tsne")+
+  theme_bw()+
+  theme(axis.title = element_text(size = 16),
+        axis.text = element_text(size = 12),
+        legend.title = element_text(size = 12),
+        panel.border = element_rect(color = "black", size = 2, fill = NA),
+        plot.title = element_text(size = 18,face = "bold",hjust = 0.5))#题目设置：face = "bold"加粗字体；hjust = 0.5位置居中
+plot
+pdf("D:\\BaiduNetdiskDownload\\Sun07.IPF\\sc\\sc.tsne.CDI.pdf",height=5,width=6)
+plot
+dev.off();dev.off();
+
+
+plot1 <- VlnPlot(seuret.data, c('CDI.score','pHB'), stack = TRUE,group.by='type',
+                 sort = TRUE, cols = pal2) +
+  theme(legend.position = "none")
+plot1
+
+
+table(data$type)
+data=seuret.data@meta.data[,c('CDI.score','type')]
+data=bio_data_process(data)
+bio_plot_mutiboxplot(data,data$type,data$CDI.score,my_comparisons=list(c('epithelial','immune')))
+
+
+#*********************************************************************************
+
+############plot
+load("D:/BaiduNetdiskDownload/Sun07.IPF/sc/GSE155698.seuret.Rdata")
+
+plot=plot_stat(seuret.data,'type', plot_type = "prop_fill", group_by = "group",pal_setup =pal2);plot
+
+dat=seuret.data@meta.data[,c("group",'type')]
+
+# 百分比柱状图
+library(scales);library(ggplot2);library(RColorBrewer)
+plot=ggplot(dat, aes(x = group, fill = type)) +
+  geom_bar(width = 0.9, position = "fill",color='black') + # 百分比柱状图
+  scale_fill_manual(values = pal2)+
+  scale_color_manual(values = 'black')+
+  scale_y_continuous(labels = percent) +
+  labs(title ="" ,
+       y = "Patients Percentage")+
+  theme_bw()+
+  theme(axis.title = element_text(size = 12),
+        axis.text.x = element_text(angle = 0, hjust = 0.5, vjust = 0.5),
+        legend.title = element_text(size = 12),
+        plot.title = element_text(size = 18,face = "bold",hjust = 0.5),
+        panel.background=element_rect(color="black", size=1))
+plot
+pdf("D:\\BaiduNetdiskDownload\\Sun07.IPF\\sc\\sc.stat.pdf",height=5,width=6)
+plot
+dev.off();dev.off();
+library(Scillus);library(magrittr)
+
+
+
+
+#*********************************************************************************
+####tsne1
+library(ggplot2)
+pal2 =c( "#7F3C8D","#A73030FF","#80BA5A","#11A579","#3969AC","#F2B701","#E73F74","#80BA5A","#E68310","#008695","#A5AA99",
+         "#5f75ae", "#64a841", "#e5486e", "#de8e06", "#b5aa0f", "#7ba39d", "#b15928", "#6a3d9a", "#cab2d6", "#374E55FF", "#00A1D5FF", "#6A6599FF",
+         "#80796BFF", "#e31a1c", "#fb9a99", "#1f78b4", "#a6cee3", "#008280FF", "#3C5488FF", "#8F7700FF", "#666666", "#A20056FF", "#fdbf6f", "#E78AC3",
+         "#b2df8a", "#386CB0", "#CD534CFF", "#008B45FF", "#7AA6DCFF", "#00A087FF", "#A73030FF", "#631879FF", "#003C67FF")
+
+seuret.data <- SetIdent(seuret.data, value = "seurat_clusters");table(seuret.data$seurat_clusters)
+plot=DimPlot(seuret.data,reduction='tsne',raster = F,
+             cols =pal2)+
+  theme_bw()+
+  theme(axis.title = element_text(size = 16),
+        axis.text = element_text(size = 12),
+        legend.title = element_text(size = 12),
+        panel.border = element_rect(color = "black", size = 1, fill = NA),
+        plot.title = element_text(size = 18,face = "bold",hjust = 0.5))#题目设置：face = "bold"加粗字体；hjust = 0.5位置居中
+plot
+pdf("D:\\BaiduNetdiskDownload\\Sun07.IPF\\sc\\sc.tsne.cluster.pdf",height=5,width=7.5)
+plot
+dev.off();dev.off();
+
+
+#************
+seuret.data <- SetIdent(seuret.data, value = "type");table(seuret.data$type)
+plot=DimPlot(seuret.data,reduction='tsne',raster = F,
+             cols =pal2)+
+  theme_bw()+
+  theme(axis.title = element_text(size = 16),
+        axis.text = element_text(size = 12),
+        legend.title = element_text(size = 12),
+        panel.border = element_rect(color = "black", size = 1, fill = NA),
+        plot.title = element_text(size = 18,face = "bold",hjust = 0.5))#题目设置：face = "bold"加粗字体；hjust = 0.5位置居中
+
+pdf("D:\\BaiduNetdiskDownload\\Sun07.IPF\\sc\\sc.tsne.ann.pdf",height=5,width=6.5)
+plot
+dev.off();dev.off();
+
+#************
+seuret.data <- SetIdent(seuret.data, value = "cells");table(seuret.data$cells)
+plot=DimPlot(seuret.data,reduction='tsne',raster = F,
+             cols =c('#D89C7A','#686789', "grey"))+
+  theme_bw()+
+  theme(axis.title = element_text(size = 16),
+        axis.text = element_text(size = 12),
+        legend.title = element_text(size = 12),
+        panel.border = element_rect(color = "black", size = 1, fill = NA),
+        plot.title = element_text(size = 18,face = "bold",hjust = 0.5))#题目设置：face = "bold"加粗字体；hjust = 0.5位置居中
+pdf("D:\\BaiduNetdiskDownload\\Sun07.IPF\\sc\\sc.tsne.main.type2.pdf",height=5,width=6.5)
+plot
+dev.off();dev.off();
+
+#************
+
+data=seuret.data@meta.data[,c('RCDS.score','type')];data=bio_data_process(data)
+plot=bio_plot_mutiboxplot(data,data$type,data$RCDS.score,my_comparisons=list(c('cancer.epithelial',' cells')));plot
+pdf("D:\\BaiduNetdiskDownload\\Sun07.IPF\\sc\\sc.boxplot.pdf",height=5,width=9)
+plot
+dev.off();dev.off();
+
+
+#********************************************************************************
+#####AUCell
+
+library(limma);library(GSVA);library(GSEABase);library(reshape2);library(irGSEA)
+library(Seurat);library(harmony);library(Scillus);library(scRNAtoolVis);library(ggsci)
+source('D:\\BaiduNetdiskDownload\\Sun00\\function\\code_function.R')
+#load("D:/BaiduNetdiskDownload/Sun07.IPF/inputdata/GSE122960.seuret.Rdata")
+Idents(seuret.data) <- seuret.data$type#设置亚群，后续选择注释后的数据
+load("D:/BaiduNetdiskDownload/Sun00/gene.cd.list.Rdata")
+#计算评分#"AUCell","UCell","singscore","ssgsea"
+seuret.data <- irGSEA.score(object = seuret.data, assay = "RNA",
+                           slot = "data", seeds = 123, ncores = 1,
+                           min.cells = 3, min.feature = 0,
+                           custom = T, geneset = gene.cd.list, msigdb = F,
+                           species = "Homo sapiens", category = "H",
+                           subcategory = NULL, geneid = "symbol",
+                           method = c("AUCell", "UCell", "singscore","ssgsea"),
+                           aucell.MaxRank = NULL, ucell.MaxRank = NULL,
+                           kcdf = 'Gaussian')
+#save(seuret.data,file="D:\\BaiduNetdiskDownload\\Sun07.IPF\\sc\\seuret.data.Rdata" )
+
+#整合差异基因集
+
+Cells.sub <- subset(seuret.data@meta.data, group=="IPF")
+seuret.data<- subset(seuret.data, cells=row.names(Cells.sub))
+
+result.dge <- irGSEA.integrate(object = seuret.data,
+                               group.by = "type",
+                               metadata = NULL, col.name = NULL,
+                               method = c("AUCell", "UCell", "singscore","ssgsea"))
+irGSEA.heatmap.plot <- irGSEA.heatmap(object = result.dge,
+                                      method = "RRA",
+                                      top = 50,
+                                      show.geneset = NULL)
+
+irGSEA.barplot.plot <- irGSEA.barplot(object = result.dge,
+                                      method = c("AUCell", "UCell", "singscore",
+                                                 "ssgsea"))
+pdf("D:\\BaiduNetdiskDownload\\Sun07.IPF\\sc\\sc.irGSEA.barplot.pdf",height=6,width=10)
+irGSEA.barplot.plot
+dev.off();dev.off();
+pdf("D:\\BaiduNetdiskDownload\\Sun07.IPF\\sc\\sc.irGSEA.heatmap.pdf",height=10,width=10)
+irGSEA.heatmap.plot
+dev.off();dev.off();
+
+
+
+####################【Mendelian randomization eqtlgen】####################
+
+Table_1 <- read_excel("D:/BaiduNetdiskDownload/Sun07.IPF/Table 1.XLSX", sheet = "STable6")
+colnames(Table_1)=Table_1[1,]
+Table_1=Table_1[-1,]
+
+OR5_data=subset(Table_1,Table_1$pval<0.05)
+OR5_data[is.na(OR5_data)] <-  'NA'
+OR6_data=subset(OR5_data,!OR5_data$pleioTab_Pvalue<0.05)
+OR6_data=subset(OR6_data,!OR6_data$Q_pval<0.05)
+
+eqtlgen.gene=OR6_data$id.exposure
+gtex.gene=OR6_data$id.exposure
+MR.gene=union(eqtlgen.gene,gtex.gene)
+save(MR.gene,file = 'D:\\BaiduNetdiskDownload\\Sun07.IPF\\out.MR.gene.Rdata')
+
+# 还没有改
+# source('D:\\BaiduNetdiskDownload\\Sun00\\function\\code_function.R')
+# load("D:/BaiduNetdiskDownload/Sun04/InputData/data.eqtlgen.Rdata")
+# load("D:/BaiduNetdiskDownload/Sun07.IPF/inputdata/gene.cd.Rdata")
+# library(do);library(openxlsx);library(writexl)
+#
+# #intersect
+# gene_name=eqtl_data$GeneSymbol;gene_name=gene_name[!duplicated(gene_name)]
+# gene_name=intersect(gene.cd,gene_name)
+# LIST=as.list(gene_name);names(LIST)=gene_name
+# eQTL_data_func=function(x){aa=subset(eqtl_data,eqtl_data$GeneSymbol==x)}
+# eQTL_data=lapply(LIST,eQTL_data_func)
+#
+#
+# source('D:\\BaiduNetdiskDownload\\Sun00\\function\\code_function.R')
+# res_eqtl_add=mr_eqtlgen_add(eQTL_data);res_eqtl_add=split(res_eqtl_add,res_eqtl_add$GeneSymbol)
+# res_eqtl_tss=mr_tss(data=res_eqtl_add,gene_name=gene_name)
+# res_eqtl_format=mr_format_eqtlgen_data1(res_eqtl_tss)
+# res_eqtl_clump=mr_local_clump(res_eqtl_format)
+# result.eqtlgen.all=list(res_eqtl_add=res_eqtl_add,res_eqtl_tss=res_eqtl_tss,
+#                         res_eqtl_format=res_eqtl_format,res_eqtl_clump=res_eqtl_clump)
+# save(result.eqtlgen.all,file = "D:\\BaiduNetdiskDownload\\Sun07.IPF\\mr.eqtlgen.all.Rdata")
+#
+#
+# #########=
+# #ebi-a-GCST90018629
+# source('D:\\BaiduNetdiskDownload\\Sun00\\function\\code_function.R')
+# get_library()
+# load("D:/BaiduNetdiskDownload/Sun07.IPF/mr.eqtlgen.all.Rdata")
+# clump_data=result.eqtlgen.all$res_eqtl_clump;clump_data=rbindlist(clump_data,use.names = T)
+# outcome_data <-extract_outcome_data(snps=unique(clump_data$SNP),outcomes='bbj-a-140')
+#
+# format_data=split(clump_data,clump_data$id.exposure)
+# harm_data <-lapply(format_data, function(exp_data){
+#   BBB=TwoSampleMR::harmonise_data(exposure_dat = exp_data, outcome_dat = outcome_data)})
+# res_OR_data=mr_MR(harm_data)
+# res=mr_result(res_OR_data)
+#
+# result.eqtlgen=list(harm_data=harm_data,res_OR_data=res_OR_data,res=res)
+#
+# mr.paad.eqtl.18893=result.eqtlgen
+# save(mr.paad.eqtl.18893,file = "D:\\BaiduNetdiskDownload\\Sun07.IPF\\mr.paad.eqtl.18893.Rdata")
+# #
+# mr.paad.eqtl.18849=result.eqtlgen
+# save(mr.gc.eqtl.18849,file = "D:\\BaiduNetdiskDownload\\Sun07.IPF\\mr.gc.eqtl.18849.Rdata")
+# #
+# mr.paad.eqtl.bbj=result.eqtlgen
+# save(mr.paad.eqtl.bbj,file = "D:\\BaiduNetdiskDownload\\Sun07.IPF\\mr.paad.eqtl.bbj.Rdata")
+#
+####################【Mendelian randomization gtex】####################
+#
+# #rm(list = ls())
+# v8.egenes <- read.delim("C:\\GTEx_v8\\GTEx_Analysis_v8_eQTL\\Pancreas.v8.egenes.txt")
+# signifpairs <- read.delim("C:\\GTEx_v8\\GTEx_Analysis_v8_eQTL\\Pancreas.signifpairs.txt")
+# data_GTEx_Pancreas=mr_GTEx_V8_data(v8.egenes,signifpairs)
+# save(data_GTEx_Pancreas,file = 'D:\\BaiduNetdiskDownload\\Sun07.IPF\\inputdata\\data_GTEx_Pancreas.Rdata')
+#
+#
+#
+# source('D:\\BaiduNetdiskDownload\\Sun00\\function\\code_function.R')
+# load("D:/BaiduNetdiskDownload/Sun07.IPF/inputdata/data_GTEx_Pancreas.Rdata")
+# load("D:/BaiduNetdiskDownload/Sun07.IPF/inputdata/gene.cd.Rdata")
+# GTEx_data=data_GTEx_Pancreas
+# library(do);library(openxlsx);library(writexl)
+#
+# gene_name2=GTEx_data$gene_name;gene_name2=gene_name2[!duplicated(gene_name2)]
+# gene_name=intersect(gene.cd,gene_name2)
+# LIST=as.list(gene_name);names(LIST)=gene_name
+#
+# GTEx=lapply(LIST, function(x){aa=subset(GTEx_data,GTEx_data$gene_name==x)})
+# GTEx=rbindlist(GTEx)
+# res_GTEx=subset(GTEx,GTEx$pval_nominal<1e-5)
+# res_GTEx=split(res_GTEx,res_GTEx$gene_name)
+#
+# ##################################=
+# source('D:\\BaiduNetdiskDownload\\Sun00\\function\\code_function.R')
+# res_gtex_format=mr_format_GTEx_data3(res_GTEx)
+# res_gtex_clump=mr_local_clump(res_gtex_format)
+# out.gtex.panc.all=list(res_GTEx=res_GTEx,res_gtex_clump=res_gtex_clump)
+# save(out.gtex.panc.all,file = "D:\\BaiduNetdiskDownload\\Sun07.IPF\\out.gtex.panc.all.Rdata")
+#
+# ##################################=
+# source('D:\\BaiduNetdiskDownload\\Sun00\\function\\code_function.R')
+# load("D:/BaiduNetdiskDownload/Sun07.IPF/out.gtex.panc.all.Rdata")
+# get_library()
+# clump_data=out.gtex.panc.all$res_gtex_clump;clump_data=rbindlist(clump_data,use.names = T)
+# outcome_data <-extract_outcome_data(snps=unique(clump_data$SNP),outcomes='bbj-a-140')
+#
+# ##################################=
+# format_data=split(clump_data,clump_data$id.exposure)
+#
+# harm_data <-lapply(format_data, function(exp_data){
+#   BBB=TwoSampleMR::harmonise_data(exposure_dat = exp_data, outcome_dat = outcome_data)})
+# res_OR_data=mr_MR(harm_data)
+# res=mr_result(res_OR_data)
+#
+# #
+# mr.paad.gtex.18893=list(harm_data=harm_data,res_OR_data=res_OR_data,res=res)
+# save(mr.paad.gtex.18893,file = "D:\\BaiduNetdiskDownload\\Sun07.IPF\\mr.paad.gtex.18893.Rdata")
+#
+# mr.gc.gtex.18849=list(harm_data=harm_data,res_OR_data=res_OR_data,res=res)
+# save(mr.gc.gtex.18849,file = "D:\\BaiduNetdiskDownload\\Sun07.IPF\\mr.gc.gtex.18849.Rdata")
+# #
+# mr.paad.gtex.bbj=list(harm_data=harm_data,res_OR_data=res_OR_data,res=res)
+# save(mr.paad.gtex.bbj,file = "D:\\BaiduNetdiskDownload\\Sun07.IPF\\mr.paad.gtex.bbj.Rdata")
+#
+#
+# ##################################=
+# load("D:/BaiduNetdiskDownload/Sun04/result.gtex.sigmoid.38626.Rdata")
+# source('D:\\BaiduNetdiskDownload\\Sun00\\function\\code_function.R')
+# forest.blood=mr_plot_forest(plot_data =result.gtex.sigmoid.38626$res$OR6_data,'IBS');forest.blood
+# pdf("D:\\BaiduNetdiskDownload\\Sun04\\figure.forest.sigmoid.38626.pdf", width = 15,height =15)
+# forest.blood;dev.off();dev.off()
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+
+
+
+
+
+
+
+
+
+
+
+####################【Univ】####################
+load("D:/BaiduNetdiskDownload/Sun07.IPF/sc/markers.Rdata")
+load("D:/BaiduNetdiskDownload/Sun07.IPF/out.cd.limma.Rdata")
+sc.gene=subset(markers,markers$cluster %in% c('NR cells','R cells'))
+sc.gene=sc.gene$gene
+sc.gene=sc.gene[!duplicated(sc.gene)]
+
+#sc.gene=diff.markers$gene
+
+int=intersect(venn,out.un$covariate)
+
+
+
+source('D:\\BaiduNetdiskDownload\\Sun00\\function\\code_function.R')
+load("D:/BaiduNetdiskDownload/Sun00/GEO/IPF.cli.Rdata")
+load("D:/BaiduNetdiskDownload/Sun00/GEO/IPF.exp.Rdata")
+load("D:/BaiduNetdiskDownload/Sun07.IPF/inputdata/gene.cd.Rdata")
+
+int.gene1=intersect(rownames(IPF.exp$GSE27957),rownames(IPF.exp$GSE70866))
+int.gene2=intersect(rownames(IPF.exp$GSE28042),rownames(IPF.exp$GSE93606))
+int.gene=intersect(int.gene1,int.gene2)
+
+
+
+
+int=intersect(rownames(out.cd.limma$diffSig),int.gene)
+out_expr=IPF.exp$GSE70866[int,]
+out_surv=IPF.cli$GSE70866
+
+out_surv=out_surv[,c('ID','OS','OS.time')]
+comsam <- intersect(rownames(out_surv), colnames(out_expr))
+out_expr <- out_expr[,comsam]; out_surv <- out_surv[comsam,,drop = F]
+out_expr=as.data.frame(t(out_expr))
+merge.exp.time=merge(out_surv,out_expr,by.x='ID',by.y=0)
+merge.exp.time=bio_first(merge.exp.time)
+out.un1=bio.univ_models(merge.exp.time)
+out.un1$FDR <- p.adjust(out.un1$p.value, method = "BH")
+out.un=subset(out.un1,out.un1$p.value<0.05)
+
+save(out.un,file = "D:\\BaiduNetdiskDownload\\Sun07.IPF\\out.un.Rdata")
+
+list_venn=list(sc_dataset=venn$scRNAseq,bulk_dataset=venn$`Bulk-RNAseq`)
+
+out.venn=bio_plot_venn(list_venn)
+
+pdf(file="D:\\BaiduNetdiskDownload\\Sun07.IPF\\gene.upset.pdf", width=8, height=6)
+out.venn$plot_complex
+dev.off();dev.off();dev.off();
+
+####################【Coxboost+Enet】####################
+source('D:\\BaiduNetdiskDownload\\Sun00\\function\\code_function.R')
+load("D:/BaiduNetdiskDownload/Sun00/GEO/IPF.cli.Rdata")
+load("D:/BaiduNetdiskDownload/Sun00/GEO/IPF.exp.Rdata")
+load("D:/BaiduNetdiskDownload/Sun07.IPF/inputdata/gene.cd.Rdata")
+library(ggplot2);library(ggsci);library(glmnet);library(survival)
+source('D:\\BaiduNetdiskDownload\\Sun07.IPF\\inputdata\\code.ml.prognostic.R')
+Train_expr=IPF.exp$GSE70866[out.venn,]
+Train_surv=IPF.cli$GSE70866
+Train_surv=Train_surv[,c('ID','OS','OS.time')];rownames(Train_surv)=Train_surv$ID
+comsam <- intersect(rownames(Train_surv), colnames(Train_expr))
+Train_expr <- Train_expr[,comsam]; Train_surv <- Train_surv[comsam,,drop = F]
+Train_expr=bio_data_process(Train_expr);Train_surv=bio_data_process(Train_surv)
+Train_set = scaleData(data = Train_expr, centerFlags = T, scaleFlags = T)
+
+cvfit = cv.glmnet(x = t(Train_set),y = Surv(Train_surv$OS.time, Train_surv$OS),
+                  family = "cox", alpha = 1, nfolds = 10)
+fit = glmnet(x = t(Train_set),
+             y = Surv(Train_surv$OS.time, Train_surv$OS),
+             family = "cox", alpha = 1)
+fit$subFeature = colnames(Train_set)
+
+#美化
+x <- coef(fit)
+tmp <- as.data.frame(as.matrix(x))
+tmp$coef <- row.names(tmp)
+tmp <- reshape::melt(tmp, id = "coef")
+tmp$variable <- as.numeric(gsub("s", "", tmp$variable))
+tmp$coef <- gsub('_','-',tmp$coef)
+tmp$lambda <- fit$lambda[tmp$variable+1]
+# extract the lambda values
+tmp$norm <- apply(abs(x[-1,]), 2, sum)[tmp$variable+1]
+# compute L1 norm
+
+head(tmp)
+pdf("lambda.pdf",15,10)
+plot1=ggplot(tmp,aes(log(lambda),value,color = coef)) +
+  geom_vline(xintercept = log(cvfit$lambda.min),
+             size=0.8,color='grey60',
+             alpha=0.8,linetype=2)+
+  geom_line(size=1) +
+  xlab("Lambda (log scale)") +
+  ylab('Coefficients')+
+  theme_bw(base_rect_size = 2)+
+  scale_color_manual(values= c(pal_npg()(10),
+                               pal_d3()(10),
+                               pal_jco()(3),
+                               pal_lancet()(10),
+                               pal_aaas()(10),
+                               pal_simpsons()(10),
+                               pal_gsea()(10),
+                               pal_jama()(10)))+
+  # scale_x_continuous(expand = c(0.01,0.01))+
+  # scale_y_continuous(expand = c(0.01,0.01))+
+  theme(panel.grid = element_blank(),
+        axis.title = element_text(size=15,color='black'),
+        axis.text = element_text(size=12,color='black'),
+        legend.title = element_blank(),
+        legend.text = element_text(size=12,color='black'),
+        legend.position = 'right')+
+  annotate('text',
+           label='Optimal Lambda = 0.0351',
+           color='black')+
+  guides(col=guide_legend(ncol = 2))
+plot1
+pdf(file="D:\\BaiduNetdiskDownload\\Sun07.IPF\\vali.lasso1.pdf",  width=10, height=7)
+plot1
+dev.off();dev.off()
+
+
+##############################################===
+xx <- data.frame(lambda=cvfit[["lambda"]],
+                 cvm=cvfit[["cvm"]],
+                 cvsd=cvfit[["cvsd"]],
+                 cvup=cvfit[["cvup"]],
+                 cvlo=cvfit[["cvlo"]],
+                 nozezo=cvfit[["nzero"]])
+xx$ll<- log(xx$lambda)
+xx$NZERO<- paste0(xx$nozezo,' vars')
+
+plot2=ggplot(xx,aes(ll,cvm,color=NZERO))+
+  geom_errorbar(aes(x=ll,ymin=cvlo,ymax=cvup),
+                width=0.05,size=1)+
+  geom_vline(xintercept = xx$ll[which.min(xx$cvm)],
+             size=0.8,color='grey60',alpha=0.8,
+             linetype=2)+
+  geom_point(size=2)+
+  xlab("Log Lambda")+
+  ylab('Partial Likelihood Deviance')+
+  theme_bw(base_rect_size = 1.5)+
+  scale_color_manual(values= c(pal_npg()(10),
+                               pal_d3()(10),
+                               pal_lancet()(10),
+                               pal_aaas()(10)))+
+  # scale_x_continuous(expand = c(0.02,0.02))+
+  # scale_y_continuous(expand = c(0.02,0.02))+
+  theme(panel.grid = element_blank(),
+        axis.title = element_text(size=15,
+                                  color='black'),
+        axis.text = element_text(size=12,
+                                 color='black'),
+        legend.title = element_blank(),
+        legend.text = element_text(size=12,
+                                   color='black'),
+        legend.position = 'right')+
+  annotate('text',
+           label='',
+           color='black')+
+  guides(col=guide_legend(ncol = 2))
+pdf(file="D:\\BaiduNetdiskDownload\\Sun07.IPF\\vali.lasso2.pdf",  width=9, height=9)
+plot2
+dev.off();dev.off()
+
+library(ggplot2)
+source('D:\\BaiduNetdiskDownload\\Sun00\\function\\code_function.R')
+#########=
+model <- readRDS("D:/BaiduNetdiskDownload/Sun07.IPF/out.model.rds")
+coefficients=as.data.frame(model$`Lasso+StepCox[forward]`$coefficients);colnames(coefficients)='coefficients'
+coefficients$lncRNA=rownames(coefficients)
+coefficients=bio_data_process(coefficients)
+plot=ggplot(coefficients,aes(reorder(lncRNA,coefficients),coefficients),fill=coefficients)+
+  geom_bar(stat = "identity",fill ='#B4746B', position = "dodge",color="black",width = 0.5) +
+  theme_bw()+ labs(y="importance", x="")+
+  coord_flip()+
+  geom_line(size=1) +
+  theme_bw()+
+  theme(axis.title = element_text(size = 12),
+        axis.text.x = element_text(angle = 0, hjust = 0.5, vjust = 0.5),
+        legend.title = element_text(size = 12),
+        plot.title = element_text(size = 18,face = "bold",hjust = 0.5),
+        panel.background=element_rect(color="black", size=1))
+
+plot
+pdf(file="D:\\BaiduNetdiskDownload\\Sun07.IPF\\vali.Stepcox.pdf",  width=4, height=7)
+plot
+dev.off();dev.off()
+
+####################【AUC+KM+PCA】####################
+
+library(timeROC);library(ggplot2);library(reshape2);library(readr);library(survival)
+source('D:\\BaiduNetdiskDownload\\Sun00\\function\\code_function.R')
+load("D:/BaiduNetdiskDownload/Sun00/GEO/IPF.cli.Rdata")
+load("D:/BaiduNetdiskDownload/Sun00/GEO/IPF.exp.Rdata")
+load("D:/BaiduNetdiskDownload/Sun07.IPF/out.ml.Rdata")
+
+data.RS_mat=out.ml$RS_mat
+
+time=lapply(IPF.cli,function(id){id=id[,c('ID','OS','OS.time')];rownames(id)=id$ID;id})
+time=do.call(rbind,time);
+time$cohort=sapply(strsplit(rownames(time),"\\."),"[",1)
+rownames(time)=time$ID
+time=bio_data_process(time)
+
+data.time.rs=merge(time,data.RS_mat,by.x='ID',by.y=0);
+data.time.rs=data.time.rs[,c('cohort','ID','CoxBoost+Enet[alpha=0.1]','OS','OS.time')]
+colnames(data.time.rs)[2:3]=c('sample','score')
+data.list=split(data.time.rs,data.time.rs$cohort)
+
+#####################################################=
+data.list=split(data.time.rs,data.time.rs$cohort)
+names(data.list)
+out.auc=lapply(data.list,function(data){
+  data=bio_data_process(data)
+  medianTrainRisk=median(data$score)
+  data$group=as.vector(ifelse(data$score>medianTrainRisk,"high","low"))
+  tt <- timeROC(data$OS.time,data$OS,data$score,
+                cause = 1,weighting = 'marginal',
+                times = c(1,2,3,4,5),ROC = T,iid = T)
+  tt$AUC
+})
+
+out.auc=do.call(rbind,out.auc)
+out.auc=rbind(out.auc,GSE28735=GSE28735.auc,ICGC_PACA_AU=ICGC_PACA_AU.auc)
+out.auc=out.auc[order(rownames(out.auc)),]
+
+# write.csv(out.auc, file = 'D:\\BaiduNetdiskDownload\\Sun07.IPF\\tem.out.auc.csv', row.names = T)
+# out.auc <- read_csv("D:/BaiduNetdiskDownload/Sun07.IPF/tem.out.auc.csv");out.auc=bio_first(out.auc)
+out.auc=bio_data_process(out.auc)
+#####################################################=
+
+out.auc$GSE=rownames(out.auc)
+colnames(out.auc)[c(1:5)]=c('1-year','2-year','3-year','4-year','5-year')
+
+auc.melt <- reshape2::melt(out.auc)
+colnames(auc.melt)=c('sample','time','c.index')
+auc.melt$c.index=round(auc.melt$c.index,3)
+auc.melt$time <- factor(auc.melt$time, levels = c('5-year','4-year','3-year','2-year','1-year'))
+auc.melt$sample <- factor(auc.melt$sample)
+auc.melt=bio_data_process(auc.melt)
+##绘图
+#vjust：调整垂直水平偏移度，同理 hjust 则是控制横向偏移度；
+colors=c('#B4746B','#E8D3C0','#D89C7A','#D6C38B')
+auc.melt=bio_data_process(auc.melt)
+plot=ggplot(auc.melt,aes(x = time, y = c.index, fill = sample,color=sample))+
+  geom_bar(stat = "identity", position = "dodge",width = 0.5) +
+  #geom_text(aes(label = c.index),hjust =2.5, vjust =0.5, colour = "black", position = position_dodge(.1), size=5)+
+  scale_fill_manual(values=colors) +
+  scale_color_manual(values=colors)+
+  theme_bw()+ labs(y="C-index", x="")+
+  geom_text(aes(y=0.4,label = c.index), vjust = 0.55,colour = "black", position = position_dodge(-0.5), size=4.2)+
+  scale_y_continuous(expand = c(0,0))+
+  facet_grid( ~sample, drop=F,scale="free", space="free_x")+
+  coord_flip() +
+  theme_classic()+
+  theme_bw()+
+  ylim(0, max(auc.melt$c.index))
+plot
+
+
+pdf(file="D:\\BaiduNetdiskDownload\\Sun07.IPF\\vali.C.index.pdf",width=10, height=6)
+plot
+dev.off();dev.off()
+
+
+
+##################KM
+library(Rmisc);library(survminer)
+
+
+out.km=lapply(data.list, function(data){
+  data=bio_data_process(data)
+  # cut.off=median(data$score)
+  # data$group=as.vector(ifelse(data$score>cut.off,"high","low"))
+
+  cut <- surv_cutpoint(data,'OS.time','OS','score')
+  data$group=ifelse(data$score>cut$cutpoint$cutpoint,"high","low")
+  #生存分析
+
+  fit <- survfit(Surv(OS.time,OS)~group,data)
+  mytheme <- theme_survminer(font.legend = c(14,"plain", "black"),
+                             font.x = c(14,"plain", "black"),
+                             font.y = c(14,"plain", "black")) ## 自定义主题
+
+  out=cbind()
+
+  p=ggsurvplot(fit,data,
+               palette = c('#D89C7A','#686789'),
+               size=1.5,
+               pval=T,
+               legend.labs=c("High","Low"),
+               legend.title='RCDI score',
+               conf.int = F,
+               xlab="Time(years)",
+               ylab='Overall survival',
+               break.time.by = 1,
+               risk.table=TRUE,
+               risk.table.title="",
+               risk.table.col = "strata",
+               risk.table.height=.25,
+               ggtheme = theme_bw())
+  p
+})
+
+save(out.km,file = "D:\\BaiduNetdiskDownload\\Sun07.IPF\\out.km.Rdata")
+
+p1=out.km$GSE27957$plot
+p2=out.km$GSE28042$plot
+p3=out.km$GSE70866$plot
+p4=out.km$GSE93606$plot
+
+
+plot=ggarrange(p1,p2,p3,p4,nrow = 2,ncol = 2,heights = c(1,1,1),
+               labels = c("GSE27957","GSE28042","GSE70866","GSE93606"))
+plot
+pdf(file="D:\\BaiduNetdiskDownload\\Sun07.IPF\\vali.km.pdf",  width=9, height=8)
+plot
+dev.off();dev.off()
+
+####################################PCA
+out.cd.limma$diffSig
+
+score=data.frame(row.names = rownames(out.ml$RS_mat),score=out.ml$RS_mat$`RSF+plsRcox`,ID=rownames(out.ml$RS_mat))
+data.pca=lapply(c(1:13),function(i){
+  int=intersect(colnames(PAAD.exp[[i]]),data.list[[i]]$sample)
+  dat=as.data.frame(t(PAAD.exp[[i]][,int]))
+
+  out=merge(dat,data.list[[i]],by.x=0,by.y='sample' )
+
+  cut.off=median(out$score)
+  out$group=as.vector(ifelse(out$score>cut.off,"high","low"))
+  #
+  # cut <- surv_cutpoint(out,'OS.time','OS','score')
+  # out$group=ifelse(out$score>cut$cutpoint$cutpoint,"high","low")
+  out
+
+})
+
+names(data.pca)=names(PAAD.cli)
+dat=data.pca$GSE21501
+bio.pca=function(dat){
+  library(ggplot2);library(plyr);library(ggord);library("factoextra")
+
+  #用`prcomp`进行PCA分析
+  dat=bio_first(dat)
+  dat=bio_data_process(dat)
+  data=dat[,-c((length(dat)-4):length(dat))]
+
+  pca.results <- prcomp(data, center = TRUE, scale. = FALSE)
+
+
+  plot=fviz_pca_ind(pca.results,
+                    geom.ind = "point", # show points only ( not "text")
+                    col.ind = dat$group, # color by groups
+                    palette = c('#D89C7A','#686789'),
+                    addEllipses = F, # Concentration ellipses
+                    legend.title = "group",
+                    title='')+
+    theme(axis.title = element_text(size = 16),
+          axis.text = element_text(size = 12),
+          legend.title = element_text(size = 12),
+          legend.position = 'top',
+          panel.border = element_rect(color = "black", size = 1, fill = NA),
+          plot.title = element_text(size = 18,face = "bold",hjust = 0.5))
+
+  plot
+
+}
+out.pca=lapply(data.pca,function(dat){out=bio.pca(dat)})
+
+save(out.pca,file = "D:\\BaiduNetdiskDownload\\Sun07.IPF\\out.pca.Rdata")
+
+
+####################【PF】####################
+
+source('D:\\BaiduNetdiskDownload\\Sun00\\function\\code_function.R')
+load("D:/BaiduNetdiskDownload/Sun00/GEO/IPF.PF.cli.Rdata")
+load("D:/BaiduNetdiskDownload/Sun00/GEO/IPF.PF.exp.Rdata")
+load("D:/BaiduNetdiskDownload/Sun07.IPF/out.ml.Rdata")
+model <- readRDS("D:/BaiduNetdiskDownload/Sun07.IPF/out.model.rds")
+
+library(pROC);library(ggplot2)
+out.IPF.PF=lapply(c(1:7),function(i){
+  Test=t(IPF.PF.exp[[i]])
+  int=intersect(colnames(Test),model$`CoxBoost+Enet[alpha=0.2]`$subFeature)
+  Test=Test[,int]
+  Test=bio_data_process(Test)
+  Test=scale(Test)
+  score<- CalRiskScore(fit = model$`CoxBoost+Enet[alpha=0.2]`,
+                       new_data =Test, # 4.0更新
+                       type = "lp") # 同原文，使用linear Predictor计算得分
+  out.score=as.data.frame(score);out.score$ID=rownames(out.score)
+  medianTrainRisk=median(out.score$score)
+  out.score$group=as.vector(ifelse(out.score$score>medianTrainRisk,"high","low"))
+  int=intersect(rownames(out.score),rownames(IPF.PF.cli[[i]]))
+  out=cbind(out.score[int,],IPF.PF.cli[[i]][int,])
+})
+names(out.IPF.PF)=names(IPF.PF.exp)
+save(out.IPF.PF,file ='D:\\BaiduNetdiskDownload\\Sun07.IPF\\out.IPF.PF.Rdata')
+load("D:/BaiduNetdiskDownload/Sun07.IPF/out.IPF.PF.Rdata")
+
+
+data=out.IPF.PF$GSE38958
+p1=bio_plot_box(data,'group','DLco% predicted');p1
+p2=bio_plot_box(data,'group','FVC% predicted');p2
+
+data=out.IPF.PF$GSE47460.GPL14550
+data=na.omit(data);data=bio_data_process(data)
+p3=bio_plot_box(data,'group','DLco% predicted');p3
+p4=bio_plot_box(data,'group','FVC% predicted');p4
+p5=bio_plot_box(data,'group','FEV1% predicted');p5
+
+
+bio_plot_ggscatter(data,'score','DLco% predicted')
+bio_plot_ggscatter(data,'score','FVC% predicted')
+bio_plot_ggscatter(data,'score','FEV1% predicted')
+
+data=out.IPF.PF$GSE47460.GPL6480
+data=na.omit(data);data=bio_data_process(data)
+bio_plot_ggscatter(data,'score','DLco% predicted')
+bio_plot_ggscatter(data,'score','FVC% predicted')
+bio_plot_ggscatter(data,'score','FEV1% predicted')
+bio_plot_ggscatter(data,'score','%emphysema (f-950):ch1')
+
+data=out.IPF.PF$GSE93606
+data=na.omit(data);data=bio_data_process(data)
+bio_plot_ggscatter(data,'score','DLco% predicted')
+bio_plot_ggscatter(data,'score','FVC% predicted')
+
+data=out.IPF.PF$GSE70866_GPL14550
+data=na.omit(data);data=bio_data_process(data);colnames(data)
+bio_plot_ggscatter(data,'score','GAP')
+bio_plot_ggscatter(data,'score','FVC% predicted')
+
+data=out.IPF.PF$GSE70866_GPL17077
+data=na.omit(data);data=bio_data_process(data);colnames(data)
+bio_plot_ggscatter(data,'score','GAP')
+bio_plot_ggscatter(data,'score','FVC% predicted')
+
+####################【PF】####################
+
+##GSE27957
+rt=data.cli$GSE27957;colnames(rt)
+
+GSE27957=as.data.frame(rbind(
+  summary(coxph(Surv(OS.time, OS) ~ CDI, rt))$concordance[1],
+  summary(coxph(Surv(OS.time, OS) ~ Age, rt))$concordance[1]
+  #summary(coxph(Surv(OS.time, OS) ~ Gender, rt))$concordance[1]
+))
+rownames(GSE27957)=c("CDI","Age")
+GSE27957$Signature=rownames(GSE27957)
+GSE27957$Signature=factor(GSE27957$Signature,c("CDI","Age"))
+colnames(GSE27957)[1]="C-index"
+GSE27957$Cohort="GSE27957"
+
+##GSE28042
+rt=data.cli$GSE28042;colnames(rt)
+
+GSE28042=as.data.frame(rbind(
+  summary(coxph(Surv(OS.time, OS) ~ CDI, rt))$concordance[1],
+  summary(coxph(Surv(OS.time, OS) ~ Age, rt))$concordance[1]
+  #summary(coxph(Surv(OS.time, OS) ~ Gender, rt))$concordance[1]
+))
+rownames(GSE28042)=c("CDI","Age")
+GSE28042$Signature=rownames(GSE28042)
+GSE28042$Signature=factor(GSE28042$Signature,c("CDI","Age"))
+colnames(GSE28042)[1]="C-index"
+GSE28042$Cohort="GSE28042"
+
+
+
+##GSE93606
+rt=data.cli$GSE93606;colnames(rt)
+GSE93606=as.data.frame(rbind(
+  summary(coxph(Surv(OS.time, OS) ~ CDI, rt))$concordance[1],
+  summary(coxph(Surv(OS.time, OS) ~ Age, rt))$concordance[1],
+  summary(coxph(Surv(OS.time, OS) ~ Gender, rt))$concordance[1]
+))
+rownames(GSE93606)=c("CDI","Age","Gender")
+GSE93606$Signature=rownames(GSE93606)
+GSE93606$Signature=factor(GSE93606$Signature,c("CDI","Age","Gender"))
+colnames(GSE93606)[1]="C-index"
+GSE93606$Cohort="GSE93606"
+
+
+
+##GSE70866
+rt=data.cli$GSE70866;colnames(rt)
+GSE70866=as.data.frame(rbind(
+  summary(coxph(Surv(OS.time, OS) ~ CDI, rt))$concordance[1],
+  summary(coxph(Surv(OS.time, OS) ~ GAP, rt))$concordance[1],
+  summary(coxph(Surv(OS.time, OS) ~ Gender, rt))$concordance[1],
+  summary(coxph(Surv(OS.time, OS) ~ Age, rt))$concordance[1]
+))
+rownames(GSE70866)=c("CDI","GAP","Gender",'Age')
+GSE70866$Signature=rownames(GSE70866)
+GSE70866$Signature=factor(GSE70866$Signature,c("CDI","GAP","Gender",'Age'))
+colnames(GSE70866)[1]="C-index"
+GSE70866$Cohort="GSE70866"
+
+
+
+sig=rbind(GSE27957,GSE28042,GSE70866,GSE93606)
+sig$`C-index`=round(sig$`C-index`,3);sig$`C-index`
+
+
+plot=ggplot(sig,aes(x = Signature, y = `C-index`, fill = Cohort,color=Cohort))+
+  geom_bar(stat = "identity", position = "dodge",width = 0.6) +
+  geom_text(aes(label = `C-index`),hjust =0.5, vjust =0.5, colour = "black", position = position_dodge(.1), size=5)+
+  scale_fill_manual(values=c('#B4746B','#E8D3C0','#D89C7A','#D6C38B','#686789','#849B91','#B77F70','#E5E2B9','#BEB1A8','#A79A89','#8A95A9','#9FABB9','#9AA690','#91A0A5') )+
+  scale_color_manual(values=c("black","black","black","black","black","black","black","black","black","black"))+
+  theme_bw()+ labs(y="C-index", x="")+
+  facet_grid( ~Cohort, drop=TRUE,scale="free", space="free_x")+
+  theme_classic()+
+  theme_bw()+
+  theme(axis.title = element_text(size = 16),
+        axis.text = element_text(size = 12),
+        plot.margin=margin(t = 14, r = 3, b = 14, l = 3, unit = "cm"),
+        legend.title = element_text(size = 12),
+        legend.position="top",
+        plot.title = element_text(size = 18,face = "bold",hjust = 0.5))#题目设置：face = "bold"加粗字体；hjust = 0.5位置居中
+pdf(file="D:\\BaiduNetdiskDownload\\Sun07.IPF\\sig.cli.pdf", width=10, height=16)
+plot
+dev.off();dev.off();
+
+
+
+####################
+bio.univ_models.cli=function(rt,covariate){
+  rt=bio_data_process(rt)
+  library(maps);library(gbm);library(survival);library(survminer);library(tidyverse)
+  univ_models <- lapply(covariate, function(covariate) {
+    formula <- as.formula(Surv(rt$OS.time, rt$OS) ~ rt[,covariate])
+    model <- coxph(formula, data = rt)
+    summary <- summary(model)
+    summary$coefficients
+    p.value <- signif(summary$wald["pvalue"], digits = 3)
+    wald.test <- signif(summary$wald["test"], digits = 3)
+    beta <- signif(summary$coef[1], digits = 2)
+    HR <-signif(summary$coef[2], digits=3);#数据表中的exp(beta)
+    HR.confint.lower <- signif(summary$conf.int[,"lower .95"], 3)
+    HR.confint.upper <- signif(summary$conf.int[,"upper .95"], 3)
+    HR.CI <- paste0(HR, " (", HR.confint.lower, "-", HR.confint.upper, ")")
+    p.value=ifelse(p.value<0.001,"<0.001",ifelse(p.value<0.01,"<0.01",ifelse(p.value<0.05,"0.05",p.value)))
+    df=cbind(covariate = covariate,
+             beta = beta,
+             HR = HR,
+             HR.CI=HR.CI,
+             HR.confint.lower=HR.confint.lower,
+             HR.confint.upper=HR.confint.upper,
+             wald.test = wald.test,
+             p.value = p.value
+    )
+
+  })
+  results <- do.call(rbind, univ_models)
+  rownames(results)=results[,1]
+  results=bio_data_process(results)
+  results$'  '='  '
+  results
+}
+
+
+##GSE27957
+rt=data.cli$GSE27957;colnames(rt)
+rt=bio_data_process(rt)
+covariate=c("CDI","Age")
+results=bio.univ_models.cli(rt,covariate)
+plot1=bio_plot_forest(results);plot1
+
+##GSE28042
+rt=data.cli$GSE28042;colnames(rt)
+rt$Gender=ifelse(rt$Gender=='M','1','0')
+rt=bio_data_process(rt)
+covariate=c("CDI","Age")
+results=bio.univ_models.cli(rt,covariate)
+plot2=bio_plot_forest(results);plot2
+
+
+##GSE70866
+rt=data.cli$GSE70866;colnames(rt)
+rt=bio_data_process(rt)
+covariate=c("CDI","Age","Gender",'GAP')
+results=bio.univ_models.cli(rt,covariate)
+plot3=bio_plot_forest(results);plot3
+
+
+
+##GSE93606
+rt=data.cli$GSE93606;colnames(rt)
+rt=bio_data_process(rt)
+covariate=c("CDI","Age","Gender")
+results=bio.univ_models.cli(rt,covariate)
+plot4=bio_plot_forest(results);plot4
+
+
+plot=ggarrange(plot1,plot2,plot3,plot4,
+               nrow = 2,ncol = 2,heights = c(1,1,1),
+               labels = c("GSE27957","GSE28042","GSE70866","GSE93606"))
+plot
+pdf(file="D:\\BaiduNetdiskDownload\\Sun07.IPF\\vali.un.pdf",  width=12, height=12)
+plot
+dev.off();dev.off()
+
+
+####################【nomo】####################
+
+source('D:\\BaiduNetdiskDownload\\Sun00\\function\\code_function.R')
+library(survival);library(regplot);library(rms);library(DynNom);library(stringr)
+load("D:/BaiduNetdiskDownload/Sun00/GEO/IPF.cli.Rdata")
+load("D:/BaiduNetdiskDownload/Sun00/GEO/IPF.exp.Rdata")
+load("D:/BaiduNetdiskDownload/Sun07.IPF/out.ml.Rdata")
+model <- readRDS("D:/BaiduNetdiskDownload/Sun07.IPF/out.model.rds")
+data.cli=lapply(IPF.cli,function(dat){
+  data=merge(dat,out.ml$RS_mat,by.x='ID',by.y=0)
+  data=data[,c('CoxBoost+Enet[alpha=0.1]',colnames(dat))]
+  colnames(data)[1]='CDI'
+  data
+})
+merge.cli.score=data.cli$GSE70866
+
+
+# merge.cli.score$Stage=as.factor(merge.cli.score$Stage)
+# merge.cli.score$T_stage=as.factor(merge.cli.score$T_stage)
+# merge.cli.score$M_stage=as.factor(merge.cli.score$M_stage)
+# merge.cli.score$N_stage=as.factor(merge.cli.score$N_stage)
+merge.cli.score=bio_data_process(merge.cli.score)
+merge.cli.score$Age=ifelse(merge.cli.score$Age>=60,'≥60','<60')
+merge.cli.score$Gender=ifelse(merge.cli.score$Gender==0,'female','male')
+#merge.cli.score$Age=as.factor(merge.cli.score$Age)
+colnames(merge.cli.score)
+dd <- datadist(merge.cli.score)
+options(datadist="dd")
+
+f <- cph(Surv(OS.time, OS)~ CDI+Age+GAP+Gender, data = merge.cli.score, x=T, y = T, surv = T)
+survival <- Survival(f)
+survival1 <- function(x)survival(1,x)
+survival3 <- function(x)survival(3,x)
+survival5 <- function(x)survival(5,x)
+nom <- nomogram(f, fun =list(survival1,survival3,survival5)
+                , fun.at = c(0.1,seq(0.1,0.9,by = 0.2), 0.9), funlabel=c("1-year survival", "3-yearsurvival", "5-year survival"))
+
+pdf(file="D:\\BaiduNetdiskDownload\\Sun07.IPF\\cli.nomogram.pdf", width=10, height=7)
+plot(nom)
+dev.off();dev.off()
+
+#校准曲线
+merge.cli.score=bio_data_process(merge.cli.score)
+res.cox=coxph(Surv(OS.time, OS)~  CDI+Age+Gender , data = merge.cli.score)
+Nomogram=predict(res.cox, data=merge.cli.score, type="risk")
+
+pdf(file="D:\\BaiduNetdiskDownload\\Sun07.IPF\\cli.calibration.pdf", width=5, height=5)  #图形的宽度和高度
+#1年校准曲线
+f <- cph(Surv(OS.time, OS) ~ Nomogram, x=T, y=T, surv=T, data=merge.cli.score, time.inc=1)
+cal <- calibrate(f, cmethod="KM", method="boot", u=1, m=(nrow(merge.cli.score)/3), B=1000)
+plot(cal, xlim=c(0,1), ylim=c(0,1),
+     xlab="Nomogram-predicted OS (%)", ylab="Observed OS (%)", lwd=1.5, col="#B4746B", sub=F)
+#3年校准曲线
+f <- cph(Surv(OS.time, OS) ~ Nomogram, x=T, y=T, surv=T, data=merge.cli.score, time.inc=3)
+cal <- calibrate(f, cmethod="KM", method="boot", u=3, m=(nrow(merge.cli.score)/3), B=1000)
+plot(cal, xlim=c(0,1), ylim=c(0,1), xlab="", ylab="", lwd=1.5, col="#E8D3C0", sub=F, add=T)
+#5年校准曲线
+f <- cph(Surv(OS.time, OS) ~ Nomogram, x=T, y=T, surv=T, data=merge.cli.score, time.inc=5)
+cal <- calibrate(f, cmethod="KM", method="boot", u=5, m=(nrow(merge.cli.score)/3), B=1000)
+plot(cal, xlim=c(0,1), ylim=c(0,1), xlab="", ylab="",  lwd=1.5, col="#686789", sub=F, add=T)
+legend('bottomright', c('1-year', '3-year', '5-year'),
+       col=c("#B4746B","#E8D3C0","#686789"), lwd=1.5, bty = 'n')
+dev.off();dev.off()
+
+
+
+
+
+
+
+
+####################【signature】####################
+
+
+source('D:\\BaiduNetdiskDownload\\Sun00\\function\\code_function.R')
+load("D:/BaiduNetdiskDownload/Sun00/GEO/IPF.cli.Rdata")
+load("D:/BaiduNetdiskDownload/Sun00/GEO/IPF.exp.Rdata")
+load("D:/BaiduNetdiskDownload/Sun07.IPF/out.ml.Rdata")
+model <- readRDS("D:/BaiduNetdiskDownload/Sun07.IPF/out.model.rds")
+signature <- read_excel("D:/BaiduNetdiskDownload/Sun07.IPF/Inputdata/signature.xlsx")
+signature=bio_data_process(signature)
+library(tidyverse);library(readxl);library(survival)
+signature_list=split(signature,signature$Model)
+
+gene.list=lapply(IPF.exp, function(expr){
+  lapply(signature_list,function(gene){
+    int=intersect(rownames(expr),gene$Gene)
+    merge=merge(gene,expr,by.x='Gene',by=0)
+  })
+})
+
+out.index=lapply(c(1:4),function(a){
+  out<-lapply(gene.list[[a]], function(dat){
+    rownames(dat)=dat$Gene;dat=bio_data_process(dat)
+    expr=bio_data_process(t(dat)[-c(1:3),])
+    tem=lapply(c(1:nrow(dat)),function(i){paste0('+','(',dat$Coef[i],')','*','expr[,\'',dat$Gene[i],'\']')})
+    tem=do.call(cbind,tem);tem=bio_data_process(tem);colnames(tem)=c(1:nrow(dat))
+    form=unite(tem,col=z,c(1:nrow(dat)),sep = '');form=paste0('0',form$z)
+    out=as.data.frame(eval(parse(text = form)))
+  })
+  out.risk=do.call(cbind,out)
+  colnames(out.risk)=names(gene.list[[a]])
+  rownames(out.risk)=colnames(gene.list[[a]][[1]])[-c(1:3)]
+
+
+  merge=merge(IPF.cli[[a]][,c('OS','OS.time')],out.risk,by=0);
+  merge=bio_data_process(bio_first(merge))
+
+  outcome=lapply(colnames(merge)[3:length(merge)],function(i){
+    as.numeric(summary(coxph(Surv(OS.time, OS) ~ merge[,i], merge))$concordance[1])
+  })
+  names(outcome)=colnames(merge)[3:length(merge)]
+  out.index=do.call(rbind,outcome)
+})
+
+out.dat.index=do.call(cbind,out.index)
+colnames(out.dat.index)=names(IPF.cli)
+
+tem_Cindex_mat0=as.data.frame(out.ml$Cindex_mat0)
+int=intersect(colnames(tem_Cindex_mat0),colnames(out.dat.index))
+tem_Cindex_mat0=tem_Cindex_mat0[,int];out.dat.index=out.dat.index[,int]
+
+out.dat.index=rbind(tem_Cindex_mat0['CoxBoost+Enet[alpha=0.1]',],out.dat.index)
+rownames(out.dat.index)[1]='RCDI'
+out.dat.index=bio_data_process(out.dat.index)
+out.dat.index=cbind(GSE=rownames(out.dat.index),out.dat.index)
+save(out.dat.index,file = 'D:\\BaiduNetdiskDownload\\Sun07.IPF\\out.dat.index.Rdata')
+######plot
+
+library(reshape2);library(ggplot2);library(ggpubr);library(readr)
+load("D:/BaiduNetdiskDownload/Sun07.IPF/out.dat.index.Rdata")
+
+out.sig1=melt(out.dat.index)
+colnames(out.sig1)=c('signature','cohort','cindex')
+out.sig1=out.sig1[order(out.sig1$cindex,decreasing = T),]
+out.sig1.list=split(out.sig1,out.sig1$cohort)
+
+bio_tem_plot_bar=function(data,col){
+  plot=ggplot(data,aes(reorder(signature,cindex),cindex),fill = cohort,color=cohort)+
+    geom_bar(stat = "identity",fill =col, position = "dodge",color=NA,width = 0.5) +
+    theme_bw()+ labs(y="C-index", x="")+
+    facet_grid( ~cohort)+
+    coord_flip()+
+    geom_line(size=1) +
+    theme_bw()+
+    theme(axis.title = element_text(size = 12),
+          axis.text.x = element_text(angle = 0, hjust = 0.5, vjust = 0.5),
+          legend.title = element_text(size = 12),
+          plot.title = element_text(size = 18,face = "bold",hjust = 0.5),
+          panel.background=element_rect(color="black", size=1))
+}
+p1=bio_tem_plot_bar(out.sig1.list$GSE27957,'#B4746B');p1
+p2=bio_tem_plot_bar(out.sig1.list$GSE28042,'#E8D3C0');p2
+p3=bio_tem_plot_bar(out.sig1.list$GSE70866,'#D89C7A');p3
+p4=bio_tem_plot_bar(out.sig1.list$GSE93606,'#D6C38B');p4
+
+
+
+plot=ggarrange(p1,p2,p3,p4,nrow = 2,ncol = 2,heights = c(1,1,1))
+pdf(file="D:\\BaiduNetdiskDownload\\Sun07.IPF\\sig.cindex.pdf",  width=7, height=7)
+plot
+dev.off();dev.off()
+
+
+
+
+
+
+
+
+
+
+####################【RCDI】####################
+fit=model$`CoxBoost+Enet[alpha=0.1]`
+
+save(fit,file='D:\\BaiduNetdiskDownload\\Sun07.IPF\\fit.Rdata')
+
+CDI=function(data){
+  CalRiskScore <- function(fit, new_data, type = "lp"){
+    new_data <- new_data[, fit$subFeature]
+    RS <- quiet(switch(
+      EXPR = class(fit)[1],
+      "coxnet"      = predict(fit, type = 'link', as.matrix(new_data)),
+      "coxph"       = predict(fit, type = 'lp', as.data.frame(new_data)),
+      "survivalsvm" = predict(fit, as.data.frame(new_data))$predicted,
+      "CoxBoost"    = predict(fit, type = "lp", as.data.frame(new_data)),
+      "superpc"     = superpc.predict(object = fit,
+                                      data = fit$data,
+                                      newdata = list(x = t(scale(as.matrix(new_data)))),
+                                      threshold = fit$threshold,
+                                      n.components = 1)$v.pred,
+      "plsRcoxmodel" = predict(fit, type = "lp", as.data.frame(new_data)),
+      "rfsrc"        = predict(fit, as.data.frame(new_data))$predicted,
+      "gbm"          = predict(fit, type = 'link', as.data.frame(new_data))
+    ))
+    RS = as.vector(RS)
+    names(RS) = rownames(new_data)
+    return(RS)
+  }
+  int=intersect(colnames(data),fit$subFeature)
+  data=data[,fit$subFeature]
+  data=scale(data)
+  score<- CalRiskScore(fit =fit, new_data =data,type = "lp")
+}
+
+

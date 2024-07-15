@@ -1,0 +1,26 @@
+{
+    "id": "E6EA1846",
+    "path": "C:/Users/15512/Desktop/CDI/R/hello.R",
+    "project_path": "R/hello.R",
+    "type": "r_source",
+    "hash": "2021043269",
+    "contents": "",
+    "dirty": false,
+    "created": 1717421528496.0,
+    "source_on_save": false,
+    "relative_order": 1,
+    "properties": {
+        "source_window_id": "",
+        "Source": "Source",
+        "cursorPosition": "44,0",
+        "scrollLine": "0"
+    },
+    "folds": "16|19|42|0|\n",
+    "lastKnownWriteTime": 1717422180,
+    "encoding": "GB18030",
+    "collab_server": "",
+    "source_window": "",
+    "last_content_update": 1717422180285,
+    "read_only": false,
+    "read_only_alternatives": []
+}
